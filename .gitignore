@@ -1,0 +1,15 @@
+#Environment variables
+.env
+
+#Virtual Environments
+agent-env/
+venv/
+env/
+
+#Database files
+*.db
+*.sqlite3
+
+#Python Cache
+pycache/
+*.py[cod]

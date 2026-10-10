@@ -1,0 +1,7 @@
+INVOICE
+Vendor: TechCorp Solutions
+Invoice ID: INV-2024-001
+PO Number: PO-1001
+Total Amount: 1500.00
+Due Date: 2026-11-01
+Description: Cloud infrastructure monthly retainer
