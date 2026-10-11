@@ -5,7 +5,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from langchain_core.messages import HumanMessage, ToolMessage
 
-from agent import agent
+from src.agent import agent
 
 app = FastAPI(title="ERP Manangement ReAct Agent - Dashboard")
 DB_FILE = "chat_history.db"
