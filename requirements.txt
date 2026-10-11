@@ -1,0 +1,15 @@
+# Agent Framework & LLM
+langgraph==1.2.14
+langchain==1.4.4
+langchain-core==1.6.9
+langchain-google-genai==4.4.0
+
+# Backend & Real-Time Dashboard
+fastapi==0.143.0
+uvicorn==0.54.0
+websockets==16.1.1
+requests==2.34.2
+
+# Configuration & Validation
+python-dotenv==1.2.4
+pydantic==2.14.0

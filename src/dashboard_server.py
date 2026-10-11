@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage, ToolMessage
 
 from agent import agent
 
-app = FastAPI(title="CentrAlign Agent Dashboard")
+app = FastAPI(title="ERP Manangement ReAct Agent - Dashboard")
 DB_FILE = "chat_history.db"
 
 def init_chat_db():

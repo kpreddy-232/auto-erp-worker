@@ -1,0 +1,5 @@
+INVOICE
+Vendor: TechCorp Solutions
+PO Number: PO-1001
+Total Amount: 1500.00
+Description: Emergency Server Maintenance
