@@ -13,3 +13,8 @@ env/
 #Python Cache
 pycache/
 *.py[cod]
+
+#Temporary folders/future development
+chroma_db
+invoices
+Temp

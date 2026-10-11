@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CentrAlign Autonomous Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .prose strong { font-weight: 700; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-top: 0.5rem; }
+        .typing-indicator span {
+            animation: blink 1.4s infinite both;
+            height: 6px; width: 6px; background-color: #3b82f6; border-radius: 50%; display: inline-block; margin: 0 2px;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen flex flex-col font-sans">
+
+    <header class="bg-white shadow-sm border-b border-gray-200 py-4 px-6 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">CA</div>
+            <div>
+                <h1 class="text-xl font-semibold text-gray-800">CentrAlign AI Worker</h1>
+                <p class="text-xs text-gray-500 font-mono" id="session-display">Session: demo_session_1</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <select id="role-selector" class="border border-gray-300 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 font-medium">
+                <option value="Employee">Employee Role</option>
+                <option value="Manager">Manager Role</option>
+            </select>
+            <button onclick="startNewSession()" class="text-sm font-medium text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 px-3 py-1.5 rounded-lg transition">
+                + New Session
+            </button>
+            <div class="flex items-center space-x-2 border-l pl-4">
+                <span id="status-indicator" class="w-3 h-3 bg-red-500 rounded-full"></span>
+                <span id="status-text" class="text-sm text-gray-500 font-medium">Disconnected</span>
+            </div>
+        </div>
+    </header>
+
+    <main id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-6 max-w-4xl w-full mx-auto"></main>
+
+    <footer class="bg-white border-t border-gray-200 p-4 w-full">
+        <div class="max-w-4xl mx-auto flex space-x-4 relative">
+            <input type="text" id="task-input" 
+                class="flex-1 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                placeholder="Ask the agent a task..."
+                onkeypress="handleKeyPress(event)">
+            <button onclick="sendTask()" id="send-btn"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl shadow-sm transition disabled:opacity-50">
+                Execute
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const taskInput = document.getElementById('task-input');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const sendBtn = document.getElementById('send-btn');
+        let ws;
+
+        function connect() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            ws.onopen = () => { statusIndicator.classList.replace('bg-red-500', 'bg-green-500'); statusText.innerText = 'Ready'; };
+            ws.onclose = () => { setTimeout(connect, 2000); };
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                removeTypingIndicator();
+                if (data.type === 'history') appendMessage(data.role, data.content);
+                else if (data.type === 'tool_call') { appendAction(`⚙️ Using tool: <b>${data.tool_name}</b>`, JSON.stringify(data.args)); showTypingIndicator("Executing..."); }
+                else if (data.type === 'observation') { appendObservation(`📄 Result: ${data.content}`); showTypingIndicator("Thinking..."); }
+                else if (data.type === 'ai_response') { appendMessage('agent', data.content); sendBtn.disabled = false; }
+                else if (data.type === 'approval_required') { appendApprovalUI(data.tool_calls); sendBtn.disabled = true; }
+                else if (data.type === 'session_confirmed') { chatContainer.innerHTML = ''; document.getElementById('session-display').innerText = "Session: " + data.session_id; }
+            };
+        }
+
+        function sendTask() {
+            const task = taskInput.value.trim();
+            const role = document.getElementById('role-selector').value;
+            if (!task || !ws || ws.readyState !== WebSocket.OPEN) return;
+            
+            appendMessage('user', task);
+            ws.send(JSON.stringify({ action: "task", task: task, role: role }));
+            
+            taskInput.value = '';
+            sendBtn.disabled = true;
+            showTypingIndicator("Agent is planning...");
+        }
+
+        function startNewSession() {
+            const newSessionId = "session_" + Math.random().toString(36).substr(2, 6);
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: "set_session", session_id: newSessionId }));
+        }
+
+        function submitApproval(isApproved) {
+            const approvalBox = document.getElementById('current-approval');
+            if (approvalBox) {
+                approvalBox.innerHTML = `<p class="text-sm font-medium ${isApproved ? 'text-green-600' : 'text-red-600'}">Action ${isApproved ? 'Accepted' : 'Rejected'} by User</p>`;
+                approvalBox.removeAttribute('id');
+            }
+            ws.send(JSON.stringify({ action: "approval_response", approved: isApproved }));
+            showTypingIndicator("Resuming...");
+        }
+
+        function handleKeyPress(e) { if (e.key === 'Enter') sendTask(); }
+        function appendMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            const innerDiv = document.createElement('div');
+            innerDiv.className = `max-w-[80%] rounded-2xl px-5 py-3 prose ${role === 'user' ? 'bg-blue-600 text-white rounded-br-none shadow-md' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}`;
+            innerDiv.innerHTML = role === 'agent' ? marked.parse(text) : text;
+            div.appendChild(innerDiv);
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+        function appendAction(title, details) {
+            const div = document.createElement('div');
+            div.className = "flex justify-start ml-4";
+            div.innerHTML = `<div class="bg-gray-100 border rounded-lg px-4 py-2 text-sm text-gray-700 max-w-[80%]"><p class="font-medium">${title}</p><p class="text-xs text-gray-500 mt-1 font-mono">${details}</p></div>`;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+        function appendObservation(text) {
+            const div = document.createElement('div');
+            div.className = "flex justify-start ml-8 mb-2";
+            div.innerHTML = `<div class="bg-blue-50 border rounded-md px-3 py-1.5 text-xs text-blue-800 font-mono shadow-inner max-w-[70%]">${text}</div>`;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+        function appendApprovalUI(toolCalls) {
+            const div = document.createElement('div');
+            div.className = "flex justify-start ml-4 my-4";
+            let toolsHtml = toolCalls.map(tc => `<li class="font-mono text-xs">${tc.name}</li>`).join('');
+            div.innerHTML = `<div id="current-approval" class="bg-amber-50 border-amber-200 rounded-lg p-4 shadow-sm"><p class="text-sm font-semibold text-amber-800">Authorization Required</p><ul class="list-disc pl-5 text-amber-700 mb-4">${toolsHtml}</ul><button onclick="submitApproval(true)" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm mr-2">Accept</button><button onclick="submitApproval(false)" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm">Reject</button></div>`;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+        function showTypingIndicator(msg) {
+            removeTypingIndicator();
+            const div = document.createElement('div');
+            div.id = 'typing-indicator';
+            div.className = "flex justify-start items-center space-x-2 text-gray-400 text-sm italic";
+            div.innerHTML = `<div class="typing-indicator flex items-center"><span></span><span></span><span></span></div><p>${msg}</p>`;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+        function removeTypingIndicator() { const ind = document.getElementById('typing-indicator'); if (ind) ind.remove(); }
+        function scrollToBottom() { chatContainer.scrollTop = chatContainer.scrollHeight; }
+        connect();
+    </script>
+</body>
+</html>
